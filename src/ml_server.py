@@ -6,8 +6,8 @@ from sklearn.model_selection import train_test_split
 
 from flask_wtf import FlaskForm
 from flask_bootstrap import Bootstrap
-from flask import Flask, request, url_for
-from flask import render_template, redirect, send_file
+from flask import Flask, url_for, send_file
+from flask import render_template, redirect
 
 from flask_wtf.file import FileAllowed
 from wtforms.validators import DataRequired
@@ -40,7 +40,7 @@ class ChooseParameters(FlaskForm):
 class LoadAllData(FlaskForm):
     roadmap_list = ["Yes", "No"]
     roadmap = SelectField('Do you want to divide the available data into training and test samples?', choices=roadmap_list)
-    test_size = StringField('Test size (ignore if No)', validators=[DataRequired()], default='0.2')
+    test_size = StringField('Test size (Ignored if you choosed "No")', validators=[DataRequired()], default='0.2')
     file_path = FileField('Load the dataset', validators=[
         DataRequired('Specify file'),
         FileAllowed(['csv'], 'CSV format only!')
@@ -111,7 +111,7 @@ def init():
                 return redirect(url_for('train_test'))
             return redirect(url_for('data'))
 
-        return render_template('from_form.html', form=init_form)
+        return render_template('choose_parameters.html', form=init_form)
     except Exception as exc:
         app.logger.info('Exception: {0}'.format(exc))
 
@@ -185,6 +185,7 @@ def train_model():
     train_rmse = 'No info'
     test_rmse = 'No info'
     inference_info = ''
+    validation_info = ''
     try:
         train_form = TrainModel()
 
@@ -197,8 +198,9 @@ def train_model():
             if data_class.X_test is not None:
                 y_pred = model.model.predict(data_class.X_test)
                 test_rmse = mean_squared_error(data_class.y_test, y_pred, squared=False)
-            inference_info = 'Go to inference model'
-        return render_template('train_model.html', form=train_form, train_rmse=train_rmse, test_rmse=test_rmse, inference_info=inference_info)
+            inference_info = 'Click to go to inference section (prediction only)\n'
+            validation_info = 'Click to load another validation data'
+        return render_template('train_model.html', form=train_form, train_rmse=train_rmse, test_rmse=test_rmse, inference_info=inference_info, validation_info=validation_info)
     except Exception as exc:
         app.logger.info('Exception: {0}'.format(exc))
 
@@ -226,10 +228,16 @@ def inference():
             path = '/'.join(os.path.abspath(__file__).split('/')[:-1])
             path = os.path.join(path, 'prediction.csv')
             y_pred.to_csv(path, index=False)
-            results = 'Download prediction'
+            results = 'Click to download your prediction'
         return render_template('inference.html', form=inference_form, results=results)
     except Exception as exc:
         app.logger.info('Exception: {0}'.format(exc))
+
+
+@app.route('/validation', methods=['POST', 'GET'])
+def validate():
+    pass
+
 
 @app.route('/download_prediction')
 def download():
