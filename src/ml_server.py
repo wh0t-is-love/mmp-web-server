@@ -1,3 +1,4 @@
+import os
 import io
 import pandas as pd
 from sklearn.metrics import mean_squared_error
@@ -6,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from flask_wtf import FlaskForm
 from flask_bootstrap import Bootstrap
 from flask import Flask, request, url_for
-from flask import render_template, redirect
+from flask import render_template, redirect, send_file
 
 from flask_wtf.file import FileAllowed
 from wtforms.validators import DataRequired
@@ -61,6 +62,14 @@ class LoadTrainTestData(FlaskForm):
 
 class TrainModel(FlaskForm):
     submit = SubmitField('Train model')
+
+
+class InferenceModel(FlaskForm):
+    file_path = FileField('Load the dataset', validators=[
+        DataRequired('Specify file'),
+        FileAllowed(['csv'], 'CSV format only!')
+    ])
+    submit = SubmitField('Load Data and start prediction')
 
 
 class Data:
@@ -173,7 +182,6 @@ def data():
 
 @app.route('/train_model', methods=['POST', 'GET'])
 def train_model():
-    trained = False
     train_rmse = 'No info'
     test_rmse = 'No info'
     inference_info = ''
@@ -189,8 +197,6 @@ def train_model():
             if data_class.X_test is not None:
                 y_pred = model.model.predict(data_class.X_test)
                 test_rmse = mean_squared_error(data_class.y_test, y_pred, squared=False)
-            trained = True
-        if trained:
             inference_info = 'Go to inference model'
         return render_template('train_model.html', form=train_form, train_rmse=train_rmse, test_rmse=test_rmse, inference_info=inference_info)
     except Exception as exc:
@@ -199,4 +205,32 @@ def train_model():
 
 @app.route('/inference', methods=['POST', 'GET'])
 def inference():
-    pass
+    results = ''
+    try:
+        inference_form = InferenceModel()
+
+        if inference_form.validate_on_submit():
+            stream = io.StringIO(inference_form.file_path.data.stream.read().decode("UTF8"), newline=None)
+            tmp = pd.read_csv(stream)
+            try:
+                tmp = tmp.drop(columns=['id'])
+            except:
+                pass
+            try:
+                tmp = tmp.drop(columns=['price'])
+            except:
+                pass
+            tmp = tmp.to_numpy()
+            y_pred = model.model.predict(tmp)
+            y_pred = pd.DataFrame({'price': y_pred})
+            path = '/'.join(os.path.abspath(__file__).split('/')[:-1])
+            path = os.path.join(path, 'prediction.csv')
+            y_pred.to_csv(path, index=False)
+            results = 'Download prediction'
+        return render_template('inference.html', form=inference_form, results=results)
+    except Exception as exc:
+        app.logger.info('Exception: {0}'.format(exc))
+
+@app.route('/download_prediction')
+def download():
+    return send_file('prediction.csv', as_attachment=True)
