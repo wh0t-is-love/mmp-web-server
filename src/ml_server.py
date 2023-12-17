@@ -1,5 +1,7 @@
 import io
 import pandas as pd
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 
 from flask_wtf import FlaskForm
 from flask_bootstrap import Bootstrap
@@ -37,6 +39,7 @@ class ChooseParameters(FlaskForm):
 class LoadAllData(FlaskForm):
     roadmap_list = ["Yes", "No"]
     roadmap = SelectField('Do you want to divide the available data into training and test samples?', choices=roadmap_list)
+    test_size = StringField('Test size (ignore if No)', validators=[DataRequired()], default='0.2')
     file_path = FileField('Load the dataset', validators=[
         DataRequired('Specify file'),
         FileAllowed(['csv'], 'CSV format only!')
@@ -55,12 +58,24 @@ class LoadTrainTestData(FlaskForm):
     ])
     submit = SubmitField('Load Data')
 
-class Data():
-    train = None
-    test = None
 
-data = Data()
-model = None
+class TrainModel(FlaskForm):
+    submit = SubmitField('Train model')
+
+
+class Data:
+    X_train = None
+    X_test = None
+    y_train = None
+    y_test = None
+
+
+class Model:
+    model = None
+
+
+data_class = Data()
+model = Model()
 
 
 @app.route('/', methods=['POST', 'GET'])
@@ -75,11 +90,11 @@ def init():
             max_depth = int(init_form.max_depth.data)
             learning_rate = float(init_form.learning_rate.data)
             if init_form.model.data == RANDOM_FOREST_NAME:
-                model = RandomForestMSE(n_estimators=n_trees,
+                model.model = RandomForestMSE(n_estimators=n_trees,
                                         max_depth=max_depth,
                                         feature_subsample_size=features_size)
             else:
-                model = GradientBoostingMSE(n_estimators=n_trees,
+                model.model = GradientBoostingMSE(n_estimators=n_trees,
                                             max_depth=max_depth,
                                             feature_subsample_size=features_size,
                                             learning_rate=learning_rate)
@@ -99,20 +114,22 @@ def train_test():
 
         if train_test_form.validate_on_submit():
             stream = io.StringIO(train_test_form.file_path_train.data.stream.read().decode("UTF8"), newline=None)
-            data.train = pd.read_csv(stream)
+            tmp = pd.read_csv(stream)
             try:
-                data.train = data.train.drop(columns=['id'])
+                tmp = tmp.drop(columns=['id'])
             except:
                 pass
-            data.train = data.train.to_numpy()
+            data_class.X_train = tmp.drop(columns=['price']).to_numpy()
+            data_class.y_train = tmp['price'].to_numpy()
 
             stream = io.StringIO(train_test_form.file_path_test.data.stream.read().decode("UTF8"), newline=None)
-            data.test = pd.read_csv(stream)
+            tmp = pd.read_csv(stream)
             try:
-                data.test = data.test.drop(columns=['id'])
+                tmp= tmp.drop(columns=['id'])
             except:
                 pass
-            data.test = data.test.to_numpy()
+            data_class.X_test = tmp.drop(columns=['price']).to_numpy()
+            data_class.y_test = tmp['price'].to_numpy()
 
             return redirect(url_for('train_model'))
 
@@ -127,8 +144,59 @@ def data():
         data_form = LoadAllData()
 
         if data_form.validate_on_submit():
-            pass
+            stream = io.StringIO(data_form.file_path.data.stream.read().decode("UTF8"), newline=None)
+            data_class.X_train = pd.read_csv(stream)
+            try:
+                data_class.X_train = data_class.X_train.drop(columns=['id'])
+            except:
+                pass
+            tmp = data_class.X_train
+            data_class.X_train = tmp.drop(columns=['price']).to_numpy()
+            data_class.y_train = tmp['price'].to_numpy()
+
+            roadmap = data_form.roadmap.data == 'Yes'
+            if roadmap:
+                test_size = float(data_form.test_size.data)
+                if not (0 <= test_size <= 1):
+                    raise ValueError("Incorrect test_size")
+                data_train, data_test, y_train, y_test = train_test_split(data_class.X_train, data_class.y_train, test_size=test_size)
+                data_class.X_train = data_train
+                data_class.X_test = data_test
+                data_class.y_train = y_train
+                data_class.y_test = y_test
+            return redirect(url_for('train_model'))
+
         return render_template('from_form.html', form=data_form)
     except Exception as exc:
         app.logger.info('Exception: {0}'.format(exc))
 
+
+@app.route('/train_model', methods=['POST', 'GET'])
+def train_model():
+    trained = False
+    train_rmse = 'No info'
+    test_rmse = 'No info'
+    inference_info = ''
+    try:
+        train_form = TrainModel()
+
+        if train_form.validate_on_submit():
+            X_train = data_class.X_train
+            y_train = data_class.y_train
+            model.model.fit(X_train, y_train)
+            y_pred = model.model.predict(X_train)
+            train_rmse = mean_squared_error(y_train, y_pred, squared=False)
+            if data_class.X_test is not None:
+                y_pred = model.model.predict(data_class.X_test)
+                test_rmse = mean_squared_error(data_class.y_test, y_pred, squared=False)
+            trained = True
+        if trained:
+            inference_info = 'Go to inference model'
+        return render_template('train_model.html', form=train_form, train_rmse=train_rmse, test_rmse=test_rmse, inference_info=inference_info)
+    except Exception as exc:
+        app.logger.info('Exception: {0}'.format(exc))
+
+
+@app.route('/inference', methods=['POST', 'GET'])
+def inference():
+    pass

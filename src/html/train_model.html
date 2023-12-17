@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="height: 5em;"></div>
+<div class="container">
+    <h3><span>Model training:</span></h3>
+    <span style="color: gray;"><small>(This may take some time)</small></span>
+    {{ wtf.quick_form(form) }}
+    <span>RMSE on train:</span><br>
+    <span style="height: 1pt;">{{ train_rmse }}</span><br>
+    <span>RMSE on test:</span><br>
+    <span style="height: 1pt;">{{ test_rmse }}</span><br>
+    <a href="{{url_for('inference')}}"">{{inference_info}}</a>
+</div>
+<hr>
+<br>
+{% endblock %}
