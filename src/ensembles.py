@@ -119,7 +119,7 @@ class GradientBoostingMSE:
             self.features_num.append(features)
             model.fit(X[subspace][:, features], gradient[subspace])
             y_pred = model.predict(X[:, features])
-            loss = lambda alpha: np.mean(((y_predicted + alpha * self.learning_rate * y_pred) - y) ** 2)
+            def loss(alpha): return np.mean(((y_predicted + alpha * self.learning_rate * y_pred) - y) ** 2)
             best_alpha = minimize_scalar(loss)
             self.coef.append(best_alpha.x * self.learning_rate)
             y_predicted += best_alpha.x * self.learning_rate * y_pred
