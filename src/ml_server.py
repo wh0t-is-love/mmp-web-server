@@ -72,6 +72,14 @@ class InferenceModel(FlaskForm):
     submit = SubmitField('Load Data and start prediction')
 
 
+class ValidateData(FlaskForm):
+    file_path = FileField('Load the dataset', validators=[
+        DataRequired('Specify file'),
+        FileAllowed(['csv'], 'CSV format only!')
+    ])
+    submit = SubmitField('Load Data and start prediction')
+
+
 class Data:
     X_train = None
     X_test = None
@@ -228,6 +236,7 @@ def inference():
             path = '/'.join(os.path.abspath(__file__).split('/')[:-1])
             path = os.path.join(path, 'prediction.csv')
             y_pred.to_csv(path, index=False)
+
             results = 'Click to download your prediction'
         return render_template('inference.html', form=inference_form, results=results)
     except Exception as exc:
@@ -236,7 +245,30 @@ def inference():
 
 @app.route('/validation', methods=['POST', 'GET'])
 def validate():
-    pass
+    results = ''
+    test_rmse = 'No info'
+    try:
+        inference_form = InferenceModel()
+
+        if inference_form.validate_on_submit():
+            stream = io.StringIO(inference_form.file_path.data.stream.read().decode("UTF8"), newline=None)
+            tmp = pd.read_csv(stream)
+            try:
+                tmp = tmp.drop(columns=['id'])
+            except:
+                pass
+            X_test = tmp.drop(columns=['price']).to_numpy()
+            y_test = tmp['price'].to_numpy()
+            y_pred = model.model.predict(X_test)
+            y_pred = pd.DataFrame({'price': y_pred})
+            path = '/'.join(os.path.abspath(__file__).split('/')[:-1])
+            path = os.path.join(path, 'prediction.csv')
+            y_pred.to_csv(path, index=False)
+            test_rmse = mean_squared_error(y_test, y_pred, squared=False)
+            results = 'Click to download your prediction'
+        return render_template('validation.html', form=inference_form, results=results, test_rmse=test_rmse)
+    except Exception as exc:
+        app.logger.info('Exception: {0}'.format(exc))
 
 
 @app.route('/download_prediction')
