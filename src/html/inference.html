@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container">
-    <h3><span>Make prediction:</span></h3>
+    <h2><span>Make prediction:</span></h2>
     {{ wtf.quick_form(form) }}
     <a href="{{url_for('download')}}"">{{results}}</a>
 </div>
