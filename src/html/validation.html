@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2><span>Make prediction:</span></h2>
+    {{ wtf.quick_form(form) }}
+    <span>RMSE:</span><br>
+    <span style="height: 1pt;">{{ test_rmse }}</span><br>
+    <a href="{{url_for('download')}}"">{{results}}</a>
+</div>
+<hr>
+<br>
+{% endblock %}
